@@ -46,6 +46,10 @@ Then open **AI Settings** in the app and click *Save & test*. Any OpenAI-compati
 "sends data" badge, because the page's app names and file names are sent to it when you click Explain.
 Settings live in `~/.macpulse/settings.json`.
 
+**Using Claude instead:** in AI Settings click *Claude (Anthropic API)*, paste an API key from
+console.anthropic.com and press *Save & test*. A claude.ai subscription does not include API access;
+the API is billed separately by usage. The key is stored in `~/.macpulse/settings.json` (mode 600).
+
 Not Apple's on-device model: that framework is Swift-only and needs macOS 26 on Apple Silicon.
 
 ## Permissions

@@ -24,13 +24,18 @@ pub struct Settings {
     pub base_url: String,
     pub model: String,
     pub api_key: String,
+    /// "openai" (Ollama, LM Studio, any OpenAI-compatible server) or "anthropic" (Claude).
+    pub kind: String,
 }
 
 impl Default for Settings {
     fn default() -> Self {
-        Self { base_url: "http://localhost:11434/v1".into(), model: "llama3.2:3b".into(), api_key: String::new() }
+        Self { base_url: "http://localhost:11434/v1".into(), model: "llama3.2:3b".into(), api_key: String::new(), kind: "openai".into() }
     }
 }
+
+pub const CLAUDE_URL: &str = "https://api.anthropic.com";
+pub const CLAUDE_MODEL: &str = "claude-haiku-5-5";
 
 impl Settings {
     fn path() -> PathBuf {
@@ -53,6 +58,20 @@ impl Settings {
                 let _ = std::fs::set_permissions(&p, std::fs::Permissions::from_mode(0o600));
             }
         }
+    }
+
+    pub fn is_claude(&self) -> bool {
+        self.kind == "anthropic" || self.base_url.contains("api.anthropic.com")
+    }
+
+    pub fn use_ollama(&mut self) {
+        *self = Self { api_key: String::new(), ..Self::default() };
+    }
+
+    pub fn use_claude(&mut self) {
+        self.kind = "anthropic".into();
+        self.base_url = CLAUDE_URL.into();
+        self.model = CLAUDE_MODEL.into();
     }
 
     pub fn is_local(&self) -> bool {
@@ -82,9 +101,19 @@ pub fn clean(text: &str) -> String {
         .to_string()
 }
 
+/// Pull the human-readable message out of an API error body (works for Claude and OpenAI-style).
+fn api_message(body: &str) -> String {
+    serde_json::from_str::<Value>(body)
+        .ok()
+        .and_then(|v| v["error"]["message"].as_str().map(str::to_owned))
+        .unwrap_or_else(|| body.chars().take(160).collect())
+}
+
 fn describe_status(code: u16, body: &str, s: &Settings) -> String {
-    let short: String = body.chars().take(160).collect();
+    let short = api_message(body);
     match code {
+        401 | 403 if s.is_claude() => "Claude rejected the API key. Create a key at console.anthropic.com and paste it in AI Settings.".into(),
+        400 if s.is_claude() && short.to_lowercase().contains("credit") => format!("Your Anthropic account has no credit left: {short}"),
         404 if body.to_lowercase().contains("model") => {
             format!("Model \"{}\" is not installed. In Terminal run:  ollama pull {}", s.model, s.model)
         }
@@ -94,6 +123,9 @@ fn describe_status(code: u16, body: &str, s: &Settings) -> String {
 }
 
 pub fn chat(s: &Settings, messages: &[Msg]) -> Result<String, String> {
+    if s.is_claude() {
+        return chat_claude(s, messages);
+    }
     let url = format!("{}/chat/completions", s.base_url.trim_end_matches('/'));
     let msgs: Vec<Value> = messages.iter().map(|(r, c)| json!({"role": r, "content": c})).collect();
     let mut req = ureq::post(&url).timeout(Duration::from_secs(180));
@@ -117,7 +149,61 @@ pub fn chat(s: &Settings, messages: &[Msg]) -> Result<String, String> {
     }
 }
 
+/// Claude's Messages API: system prompt is separate and turns must alternate.
+fn chat_claude(s: &Settings, messages: &[Msg]) -> Result<String, String> {
+    if s.api_key.trim().is_empty() {
+        return Err("Add your Anthropic API key in AI Settings to use Claude.".into());
+    }
+    let system: String = messages.iter().filter(|(r, _)| r == "system").map(|(_, c)| c.as_str()).collect::<Vec<_>>().join("\n");
+    let mut turns: Vec<Value> = vec![];
+    for (role, text) in messages.iter().filter(|(r, _)| r != "system") {
+        match turns.last_mut() {
+            Some(last) if last["role"] == role.as_str() => {
+                let merged = format!("{}\n\n{}", last["content"].as_str().unwrap_or(""), text);
+                last["content"] = Value::String(merged);
+            }
+            _ => turns.push(json!({"role": role, "content": text})),
+        }
+    }
+    let url = format!("{}/v1/messages", s.base_url.trim_end_matches('/'));
+    let body = json!({"model": s.model, "max_tokens": 600, "system": system, "messages": turns});
+    let req = ureq::post(&url)
+        .timeout(Duration::from_secs(120))
+        .set("x-api-key", s.api_key.trim())
+        .set("anthropic-version", "2023-06-01");
+    match req.send_json(body) {
+        Ok(r) => {
+            let v: Value = r.into_json().map_err(|e| e.to_string())?;
+            let text: String = v["content"]
+                .as_array()
+                .map(|a| a.iter().filter_map(|b| b["text"].as_str()).collect::<Vec<_>>().join("\n"))
+                .unwrap_or_default();
+            let text = clean(&text);
+            if text.is_empty() { Err("Claude returned an empty answer. Try again.".into()) } else { Ok(text) }
+        }
+        Err(ureq::Error::Status(code, r)) => Err(describe_status(code, &r.into_string().unwrap_or_default(), s)),
+        Err(ureq::Error::Transport(t)) => Err(format!("Can't reach {} ({t}). Check your internet connection.", s.host())),
+    }
+}
+
 pub fn list_models(s: &Settings) -> Result<Vec<String>, String> {
+    if s.is_claude() {
+        if s.api_key.trim().is_empty() {
+            return Err("Paste your Anthropic API key, then click Save & test.".into());
+        }
+        let url = format!("{}/v1/models?limit=50", s.base_url.trim_end_matches('/'));
+        let req = ureq::get(&url).timeout(Duration::from_secs(10)).set("x-api-key", s.api_key.trim()).set("anthropic-version", "2023-06-01");
+        return match req.call() {
+            Ok(r) => {
+                let v: Value = r.into_json().map_err(|e| e.to_string())?;
+                let mut out: Vec<String> = v["data"].as_array().map(|a| a.iter().filter_map(|m| m["id"].as_str().map(str::to_owned)).collect()).unwrap_or_default();
+                out.sort();
+                Ok(out)
+            }
+            Err(ureq::Error::Status(code, r)) => Err(describe_status(code, &r.into_string().unwrap_or_default(), s)),
+            Err(ureq::Error::Transport(t)) => Err(format!("Can't reach {} ({t})", s.host())),
+        };
+    }
     let url = format!("{}/models", s.base_url.trim_end_matches('/'));
     let mut req = ureq::get(&url).timeout(Duration::from_secs(8));
     if !s.api_key.trim().is_empty() {
@@ -326,12 +412,16 @@ impl AiHub {
             ui.horizontal(|ui| {
                 ui.label("Presets");
                 if ui.button("Ollama (local, free)").clicked() {
-                    self.settings.base_url = "http://localhost:11434/v1".into();
-                    self.settings.api_key.clear();
+                    self.settings.use_ollama();
                 }
                 if ui.button("LM Studio (local, free)").clicked() {
+                    self.settings.use_ollama();
                     self.settings.base_url = "http://localhost:1234/v1".into();
-                    self.settings.api_key.clear();
+                }
+                if ui.button("Claude (Anthropic API)").clicked() {
+                    self.settings.use_claude();
+                    self.models.clear();
+                    self.status = None;
                 }
             });
             egui::Grid::new("ai-settings").num_columns(2).spacing([12.0, 10.0]).show(ui, |ui| {
@@ -353,7 +443,8 @@ impl AiHub {
                 });
                 ui.end_row();
                 ui.label("API key");
-                ui.add(egui::TextEdit::singleline(&mut self.settings.api_key).password(true).hint_text("not needed for local servers").desired_width(380.0));
+                let hint = if self.settings.is_claude() { "sk-ant-…  (required for Claude)" } else { "not needed for local servers" };
+                ui.add(egui::TextEdit::singleline(&mut self.settings.api_key).password(true).hint_text(hint).desired_width(380.0));
                 ui.end_row();
             });
             ui.horizontal(|ui| {
@@ -374,6 +465,12 @@ impl AiHub {
             if !self.settings.is_local() {
                 ui.label(RichText::new("This server is not on your Mac. When you click an Explain button, the page's diagnostic data (app names, file names, sizes) is sent to it.").color(theme::WARN));
             }
+        });
+        ui.add_space(8.0);
+        crate::widgets::card(ui, "Use Claude", |ui| {
+            ui.label("1.  Go to  console.anthropic.com  and sign in, then open API keys and create a key.");
+            ui.label("2.  Click the Claude preset above, paste the key, and press Save & test.");
+            ui.label(RichText::new("A claude.ai subscription does not include API access. The API is billed separately by usage, and the Haiku models are the cheapest. When you click Explain, the page's app names and file names are sent to Anthropic.").color(theme::MUTED));
         });
         ui.add_space(8.0);
         crate::widgets::card(ui, "Free setup with Ollama (about 3 minutes)", |ui| {
@@ -504,13 +601,56 @@ mod tests {
             write!(s, "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}", body.len(), body).unwrap();
             req
         });
-        let s = Settings { base_url: format!("http://127.0.0.1:{port}/v1"), model: "m".into(), api_key: "k".into() };
+        let s = Settings { base_url: format!("http://127.0.0.1:{port}/v1"), model: "m".into(), api_key: "k".into(), ..Default::default() };
         let out = chat(&s, &[("system".into(), "s".into()), ("user".into(), "hello".into())]).unwrap();
         assert_eq!(out, "Looks fine.");
         let req = handle.join().unwrap();
         assert!(req.starts_with("POST /v1/chat/completions"));
         assert!(req.to_lowercase().contains("authorization: bearer k"));
         assert!(req.contains("\"model\":\"m\""));
+    }
+
+    #[test]
+    fn claude_round_trip_against_mock_server() {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let handle = std::thread::spawn(move || {
+            let (mut s, _) = listener.accept().unwrap();
+            let mut buf = vec![0u8; 16384];
+            let mut got = 0;
+            loop {
+                got += s.read(&mut buf[got..]).unwrap();
+                let text = String::from_utf8_lossy(&buf[..got]).to_string();
+                if let Some(h) = text.find("\r\n\r\n") {
+                    let len = text[..h].lines().find_map(|l| l.to_lowercase().strip_prefix("content-length:").map(|v| v.trim().parse::<usize>().unwrap())).unwrap_or(0);
+                    if got >= h + 4 + len {
+                        break;
+                    }
+                }
+            }
+            let req = String::from_utf8_lossy(&buf[..got]).to_string();
+            let body = r#"{"content":[{"type":"text","text":"**All good.**"}]}"#;
+            write!(s, "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}", body.len(), body).unwrap();
+            req
+        });
+        let s = Settings { base_url: format!("http://127.0.0.1:{port}"), model: "claude-x".into(), api_key: "sk-ant-test".into(), kind: "anthropic".into() };
+        // Two user turns in a row must be merged, and the system prompt must be top-level.
+        let out = chat(&s, &[("system".into(), "be brief".into()), ("user".into(), "a".into()), ("user".into(), "b".into())]).unwrap();
+        assert_eq!(out, "All good.");
+        let req = handle.join().unwrap();
+        assert!(req.starts_with("POST /v1/messages"), "{req}");
+        assert!(req.to_lowercase().contains("x-api-key: sk-ant-test"));
+        assert!(req.to_lowercase().contains("anthropic-version: 2023-06-01"));
+        assert!(req.contains("\"system\":\"be brief\""));
+        assert!(req.contains("a\\n\\nb"), "{req}");
+    }
+
+    #[test]
+    fn claude_without_key_explains() {
+        let mut s = Settings::default();
+        s.use_claude();
+        assert!(chat(&s, &[("user".into(), "x".into())]).unwrap_err().contains("API key"));
+        assert!(s.is_claude() && !s.is_local());
     }
 
     #[test]
