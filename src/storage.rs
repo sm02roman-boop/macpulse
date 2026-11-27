@@ -243,3 +243,14 @@ impl State {
         }
     }
 }
+
+impl State {
+    pub fn ai_context(&self) -> String {
+        use std::fmt::Write;
+        let mut o = format!("Folder: {}\nItems (largest first):\n", self.cwd.display());
+        for n in self.nodes.iter().take(15) {
+            let _ = writeln!(o, "- {}{}: {}", n.name, if n.is_dir { "/" } else { "" }, util::size(n.size));
+        }
+        o
+    }
+}

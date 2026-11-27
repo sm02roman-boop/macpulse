@@ -221,7 +221,6 @@ impl State {
 
         let sel_total: u64 = self.rows.iter().filter(|r| r.selected).map(|r| r.bytes).sum();
         ui.horizontal(|ui| {
-            ui.heading("Smart Care");
             if self.busy {
                 ui.spinner();
             }
@@ -376,5 +375,17 @@ impl State {
                 self.cmd_output = None;
             }
         }
+    }
+}
+
+impl State {
+    pub fn ai_context(&self) -> String {
+        use std::fmt::Write;
+        let mut o = format!("Smart Care scan found {} reclaimable across {} locations. Trash holds {}.\n", util::size(self.rows.iter().map(|r| r.bytes).sum()), self.rows.len(), util::size(self.trash_bytes));
+        for r in &self.rows {
+            let t = &TARGETS[r.target];
+            let _ = writeln!(o, "- {} ({}): {} — {} [{}]", t.name, t.category, util::size(r.bytes), t.note, if t.risk == Risk::Review { "needs review" } else { "safe, regenerated automatically" });
+        }
+        o
     }
 }

@@ -31,6 +31,23 @@ Requires Rust 1.85+ and Xcode Command Line Tools (`xcode-select --install`).
 | Battery | Charge, health, cycles, temperature, wattage (`ioreg`) and per-process energy impact (`top`) |
 | Health | Rule-based audit: memory pressure, swap, low disk, thermal throttling, sustained CPU, memory-growth trend, one-click Quit |
 
+## AI explanations (free, on your Mac)
+
+Every page has an **Explain with AI** card, and there is an **Assistant** page for free-form questions.
+It uses a local model through [Ollama](https://ollama.com), so it costs nothing and your data stays on the Mac.
+
+```bash
+# after installing Ollama from ollama.com/download and opening it once:
+ollama pull llama3.2:3b
+```
+
+Then open **AI Settings** in the app and click *Save & test*. Any OpenAI-compatible server works
+(LM Studio, or a hosted API with a key). If the server is not on your Mac, the app shows an orange
+"sends data" badge, because the page's app names and file names are sent to it when you click Explain.
+Settings live in `~/.macpulse/settings.json`.
+
+Not Apple's on-device model: that framework is Swift-only and needs macOS 26 on Apple Silicon.
+
 ## Permissions
 
 For Storage and Leftovers to see everything in `~/Library`, grant **Full Disk Access**:

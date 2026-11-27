@@ -71,7 +71,6 @@ impl State {
         }
         let broken = self.items.iter().filter(|a| a.missing).count();
         ui.horizontal(|ui| {
-            ui.heading("Startup Items");
             if ui.button("↻ Rescan").clicked() {
                 self.items = scan();
             }
@@ -114,5 +113,20 @@ impl State {
             };
             self.items = scan();
         }
+    }
+}
+
+impl State {
+    pub fn ai_context(&self) -> String {
+        use std::fmt::Write;
+        let broken: Vec<_> = self.items.iter().filter(|a| a.missing).collect();
+        let mut o = format!("{} launch agents/daemons; {} point at a program that no longer exists.\n", self.items.len(), broken.len());
+        for a in broken.iter().take(15) {
+            let _ = writeln!(o, "- BROKEN {} -> {}", a.label, a.program.clone().unwrap_or_default());
+        }
+        for a in self.items.iter().filter(|a| !a.missing).take(15) {
+            let _ = writeln!(o, "- {} ({})", a.label, if a.user_owned { "user" } else { "system-wide" });
+        }
+        o
     }
 }

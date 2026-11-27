@@ -165,7 +165,6 @@ impl State {
         }
 
         ui.horizontal(|ui| {
-            ui.heading("Uninstaller");
             if self.busy {
                 ui.spinner();
             }
@@ -246,6 +245,30 @@ impl State {
                         }
                     });
                 });
+        }
+    }
+}
+
+impl State {
+    pub fn ai_context(&self) -> String {
+        use std::fmt::Write;
+        match self.selected.and_then(|i| self.apps.get(i)) {
+            Some(a) => {
+                let mut o = format!("Selected app: {} ({}), size {}.\nRelated files in ~/Library:\n", a.name, a.id, util::size(a.bytes));
+                for r in &self.related {
+                    let _ = writeln!(o, "- {} ({}): {}", r.path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default(), r.label, util::size(r.bytes));
+                }
+                o
+            }
+            None => {
+                let mut big: Vec<_> = self.apps.iter().collect();
+                big.sort_by(|a, b| b.bytes.cmp(&a.bytes));
+                let mut o = format!("{} third-party apps installed. Largest:\n", self.apps.len());
+                for a in big.iter().take(10) {
+                    let _ = writeln!(o, "- {}: {}", a.name, util::size(a.bytes));
+                }
+                o
+            }
         }
     }
 }

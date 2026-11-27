@@ -273,9 +273,6 @@ pub fn battery(ui: &mut Ui, m: &MonState, en: &mut EnergyState) {
 }
 
 pub fn health(ui: &mut Ui, m: &MonState) {
-    ui.heading("System health");
-    ui.label("Rule-based checks on memory pressure, swap, disk, CPU hogs and growth trends. No AI involved.");
-    ui.add_space(8.0);
     for f in &m.findings {
         let (icon, color) = match f.severity {
             Severity::Critical => ("●", Color32::from_rgb(232, 90, 79)),
@@ -301,5 +298,30 @@ pub fn health(ui: &mut Ui, m: &MonState) {
             });
         });
         ui.add_space(4.0);
+    }
+}
+
+impl NetState {
+    pub fn ai_context(&self) -> String {
+        use std::fmt::Write;
+        let mut o = String::from("Apps moving network data right now:\n");
+        for (n, i, out) in self.rows.iter().take(10) {
+            let _ = writeln!(o, "- {n}: down {}, up {}", util::rate(*i), util::rate(*out));
+        }
+        if self.rows.is_empty() {
+            o.push_str("(no per-app data available)\n");
+        }
+        o
+    }
+}
+
+impl EnergyState {
+    pub fn ai_context(&self) -> String {
+        use std::fmt::Write;
+        let mut o = String::from("Energy impact by process (higher = more battery use):\n");
+        for (n, p) in self.rows.iter().take(10) {
+            let _ = writeln!(o, "- {n}: {p:.1}");
+        }
+        o
     }
 }

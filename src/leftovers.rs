@@ -172,7 +172,6 @@ impl State {
 
         let sel: u64 = self.items.iter().filter(|i| i.selected).map(|i| i.bytes).sum();
         ui.horizontal(|ui| {
-            ui.heading("App Leftovers");
             if self.busy {
                 ui.spinner();
             }
@@ -245,5 +244,16 @@ mod tests {
         assert!(is_installed("com.foo.app.helper", &s));
         assert!(is_installed("com.foo.app", &s));
         assert!(!is_installed("com.other.app", &s));
+    }
+}
+
+impl State {
+    pub fn ai_context(&self) -> String {
+        use std::fmt::Write;
+        let mut o = format!("{} orphaned items ({}) found in ~/Library for apps that are not installed.\n", self.items.len(), util::size(self.items.iter().map(|i| i.bytes).sum()));
+        for i in self.items.iter().take(20) {
+            let _ = writeln!(o, "- {} in {}: {}", i.bundle_id, i.location, util::size(i.bytes));
+        }
+        o
     }
 }

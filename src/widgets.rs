@@ -2,12 +2,17 @@ use eframe::egui::{self, epaint, pos2, vec2, Color32, Pos2, RichText, Sense, Sha
 use std::collections::VecDeque;
 
 pub fn card<R>(ui: &mut Ui, title: &str, add: impl FnOnce(&mut Ui) -> R) -> R {
-    egui::Frame::group(ui.style())
-        .inner_margin(12.0)
+    egui::Frame::new()
+        .fill(crate::theme::CARD)
+        .stroke(Stroke::new(1.0, crate::theme::BORDER))
+        .corner_radius(14)
+        .inner_margin(14)
         .show(ui, |ui| {
             ui.set_width(ui.available_width());
-            ui.label(RichText::new(title).strong());
-            ui.add_space(6.0);
+            if !title.is_empty() {
+                ui.label(RichText::new(title).strong().color(crate::theme::ACCENT_SOFT));
+                ui.add_space(6.0);
+            }
             add(ui)
         })
         .inner
@@ -75,12 +80,18 @@ pub fn ring(ui: &mut Ui, frac: f32, label: &str, color: Color32) {
 
 pub fn level_color(pct: f32) -> Color32 {
     if pct >= 85.0 {
-        Color32::from_rgb(232, 90, 79)
+        crate::theme::BAD
     } else if pct >= 65.0 {
-        Color32::from_rgb(235, 170, 60)
+        crate::theme::WARN
     } else {
-        Color32::from_rgb(80, 170, 120)
+        crate::theme::GOOD
     }
+}
+
+pub fn header(ui: &mut Ui, title: &str, subtitle: &str) {
+    ui.label(RichText::new(title).size(27.0).strong());
+    ui.label(RichText::new(subtitle).color(crate::theme::MUTED));
+    ui.add_space(6.0);
 }
 
 pub const BLUE: Color32 = Color32::from_rgb(70, 140, 235);
