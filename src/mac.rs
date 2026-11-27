@@ -179,6 +179,10 @@ mod tests {
     }
 }
 
+pub fn computer_name() -> Option<String> {
+    run("scutil", &["--get", "ComputerName"]).map(|s| s.trim().to_string()).filter(|s| !s.is_empty())
+}
+
 /// Politely ask processes to quit (SIGTERM). Only works for processes you own.
 pub fn terminate(pids: &[u32]) {
     if pids.is_empty() {

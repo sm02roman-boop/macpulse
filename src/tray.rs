@@ -109,7 +109,7 @@ mod imp {
         }
 
         pub fn update(&self, s: &Snapshot) {
-            self.icon.set_title(Some(format!("{:.0}%", s.cpu_total)));
+            self.icon.set_title(Some(format!("{}  CPU {:.0}%", util::bytes(s.mem_used), s.cpu_total)));
             for (item, text) in self.rows.iter().zip(summary(s)) {
                 item.set_text(text);
             }

@@ -272,3 +272,9 @@ impl State {
         }
     }
 }
+
+impl State {
+    pub fn app_count(&self) -> usize {
+        self.apps.len()
+    }
+}

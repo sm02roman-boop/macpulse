@@ -80,10 +80,10 @@ pub fn apply(ctx: &egui::Context) {
     v.window_fill = Color32::from_rgba_unmultiplied(30, 30, 46, 238);
     v.extreme_bg_color = if glass() { Color32::from_black_alpha(100) } else { BG };
     v.faint_bg_color = card_fill();
-    v.window_stroke = Stroke::new(1.0, card_border());
+    v.window_stroke = Stroke::new(1.0_f32, card_border());
     v.window_corner_radius = CornerRadius::same(14);
     v.selection.bg_fill = ACCENT.gamma_multiply(0.5);
-    v.selection.stroke = Stroke::new(1.0, Color32::WHITE);
+    v.selection.stroke = Stroke::new(1.0_f32, Color32::WHITE);
     v.hyperlink_color = ACCENT_SOFT;
     let r = CornerRadius::same(9);
     for w in [
@@ -95,12 +95,12 @@ pub fn apply(ctx: &egui::Context) {
     ] {
         w.corner_radius = r;
     }
-    v.widgets.noninteractive.bg_stroke = Stroke::new(1.0, card_border());
+    v.widgets.noninteractive.bg_stroke = Stroke::new(1.0_f32, card_border());
     let btn = if glass() { veil(20) } else { Color32::from_rgb(44, 44, 62) };
     let btn_hover = if glass() { veil(38) } else { Color32::from_rgb(62, 56, 94) };
     v.widgets.inactive.bg_fill = btn;
     v.widgets.inactive.weak_bg_fill = btn;
-    v.widgets.inactive.bg_stroke = Stroke::new(1.0, veil(if glass() { 26 } else { 0 }));
+    v.widgets.inactive.bg_stroke = Stroke::new(1.0_f32, veil(if glass() { 26 } else { 0 }));
     v.widgets.hovered.bg_fill = btn_hover;
     v.widgets.hovered.weak_bg_fill = btn_hover;
     v.widgets.active.bg_fill = ACCENT;

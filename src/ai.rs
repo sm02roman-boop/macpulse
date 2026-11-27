@@ -328,7 +328,7 @@ impl AiHub {
         let (mut start, mut open_settings) = (false, false);
         egui::Frame::new()
             .fill(theme::ai_fill())
-            .stroke(Stroke::new(1.0, theme::ACCENT.gamma_multiply(0.6)))
+            .stroke(Stroke::new(1.0_f32, theme::ACCENT.gamma_multiply(0.6)))
             .corner_radius(14)
             .inner_margin(14)
             .show(ui, |ui| {

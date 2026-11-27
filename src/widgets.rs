@@ -4,7 +4,7 @@ use std::collections::VecDeque;
 pub fn card<R>(ui: &mut Ui, title: &str, add: impl FnOnce(&mut Ui) -> R) -> R {
     egui::Frame::new()
         .fill(crate::theme::card_fill())
-        .stroke(Stroke::new(1.0, crate::theme::card_border()))
+        .stroke(Stroke::new(1.0_f32, crate::theme::card_border()))
         .corner_radius(16)
         .inner_margin(14)
         .show(ui, |ui| {
@@ -118,11 +118,25 @@ pub fn bar(ui: &mut Ui, frac: f32, text: String, color: Color32) {
     p.text(rect.left_center() + vec2(11.0, 0.0), egui::Align2::LEFT_CENTER, text, font, Color32::WHITE);
 }
 
-/// Accent button with a glossy top highlight.
+pub fn pill(ui: &mut Ui, text: &str, color: Color32) {
+    egui::Frame::new()
+        .fill(color.gamma_multiply(0.22))
+        .corner_radius(10)
+        .inner_margin(egui::Margin::symmetric(8, 2))
+        .show(ui, |ui| {
+            ui.label(RichText::new(text).small().strong().color(color));
+        });
+}
+
 pub fn primary(ui: &mut Ui, text: &str) -> egui::Response {
+    primary_with(ui, text, crate::theme::ACCENT)
+}
+
+/// Coloured button with a glossy top highlight.
+pub fn primary_with(ui: &mut Ui, text: &str, color: Color32) -> egui::Response {
     let galley = ui.painter().layout_no_wrap(text.to_owned(), egui::FontId::proportional(14.0), Color32::WHITE);
     let (rect, resp) = ui.allocate_exact_size(galley.size() + vec2(30.0, 14.0), Sense::click());
-    let base = if resp.hovered() { crate::theme::ACCENT.gamma_multiply(1.15) } else { crate::theme::ACCENT };
+    let base = if resp.hovered() { color.gamma_multiply(1.15) } else { color };
     let p = ui.painter();
     p.rect_filled(rect, 10.0, base);
     p.rect_filled(egui::Rect::from_min_size(rect.min + vec2(2.0, 2.0), vec2(rect.width() - 4.0, 6.0)), 4.0, crate::theme::veil(26));

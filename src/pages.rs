@@ -1,5 +1,5 @@
 use crate::monitor::{MonState, Severity};
-use crate::widgets::{bar, card, level_color, ring, sparkline, BLUE, ORANGE, PURPLE, TEAL};
+use crate::widgets::{bar, card, level_color, ring, sparkline, BLUE, ORANGE, TEAL};
 use crate::{mac, treemap, util};
 use eframe::egui::{self, Color32, RichText, Ui};
 use std::sync::mpsc::{channel, Receiver};
@@ -7,57 +7,6 @@ use std::time::{Duration, Instant};
 
 fn pct(used: u64, total: u64) -> f32 {
     if total == 0 { 0.0 } else { used as f32 / total as f32 * 100.0 }
-}
-
-pub fn overview(ui: &mut Ui, m: &MonState) {
-    let s = &m.snap;
-    egui::ScrollArea::vertical().show(ui, |ui| {
-        ui.columns(2, |c| {
-            card(&mut c[0], "CPU", |ui| {
-                ui.horizontal(|ui| {
-                    ring(ui, s.cpu_total / 100.0, &format!("{:.0}%", s.cpu_total), level_color(s.cpu_total));
-                    ui.vertical(|ui| {
-                        sparkline(ui, &m.cpu, Some(100.0), BLUE, 70.0);
-                    });
-                });
-                ui.label(format!("{} cores{}", s.cores.len(), if m.perf_cores > 0 { format!(" ({} performance + {} efficiency)", m.perf_cores, m.eff_cores) } else { String::new() }));
-            });
-            card(&mut c[1], "Memory", |ui| {
-                let p = pct(s.mem_used, s.mem_total);
-                ui.horizontal(|ui| {
-                    ring(ui, p / 100.0, &format!("{p:.0}%"), level_color(p));
-                    ui.vertical(|ui| sparkline(ui, &m.mem, Some(100.0), PURPLE, 70.0));
-                });
-                ui.label(format!("{} of {} used · swap {}", util::bytes(s.mem_used), util::bytes(s.mem_total), util::bytes(s.swap_used)));
-            });
-        });
-        ui.add_space(8.0);
-        ui.columns(2, |c| {
-            card(&mut c[0], "Network", |ui| {
-                ui.set_min_height(158.0);
-                ui.label(format!("Down {}    Up {}", util::rate(s.rx_rate), util::rate(s.tx_rate)));
-                sparkline(ui, &m.rx, None, TEAL, 40.0);
-                sparkline(ui, &m.tx, None, ORANGE, 40.0);
-            });
-            card(&mut c[1], "Startup disk", |ui| {
-                ui.set_min_height(158.0);
-                let used = s.disk_total.saturating_sub(s.disk_free);
-                let p = pct(used, s.disk_total);
-                bar(ui, p / 100.0, format!("{} used of {}", util::size(used), util::size(s.disk_total)), level_color(p));
-                ui.label(format!("{} available", util::size(s.disk_free)));
-                if let Some(b) = &s.battery {
-                    ui.add_space(8.0);
-                    bar(ui, b.percent / 100.0, format!("Battery {:.0}%{}", b.percent, if b.charging { " · charging" } else { "" }), Color32::from_rgb(80, 170, 120));
-                }
-            });
-        });
-        ui.add_space(8.0);
-        card(ui, "Top apps by memory", |ui| {
-            for g in m.groups.iter().take(8) {
-                bar(ui, g.rss as f32 / s.mem_total.max(1) as f32 * 4.0, format!("{} — {}", g.name, util::bytes(g.rss)), PURPLE);
-            }
-        });
-    });
 }
 
 pub fn memory(ui: &mut Ui, m: &MonState, selected: &mut Option<String>) {

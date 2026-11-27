@@ -28,6 +28,8 @@ pub struct Snapshot {
     pub rx_rate: f64,
     pub tx_rate: f64,
     pub pressure: u8,
+    pub uptime: u64,
+    pub disk_name: String,
     pub speed_limit: Option<u8>,
     pub battery: Option<Battery>,
     pub procs: Vec<ProcInfo>,
@@ -39,6 +41,28 @@ pub struct Group {
     pub rss: u64,
     pub cpu: f32,
     pub pids: Vec<u32>,
+}
+
+#[derive(Clone, Debug)]
+pub struct Machine {
+    pub name: String,
+    pub os: String,
+    pub cpu: String,
+    pub ram: u64,
+    pub apple_silicon: bool,
+}
+
+impl Machine {
+    pub fn detect() -> Self {
+        let mut sys = System::new();
+        sys.refresh_cpu_all();
+        sys.refresh_memory();
+        let name = mac::computer_name().or_else(System::host_name).unwrap_or_else(|| "This Mac".into());
+        let ver = System::os_version().unwrap_or_default();
+        let os = if cfg!(target_os = "macos") { format!("macOS {ver}") } else { format!("{} {ver}", System::name().unwrap_or_default()).trim().to_string() };
+        let cpu = sys.cpus().first().map(|c| c.brand().trim().to_string()).unwrap_or_default();
+        Self { name, os, cpu, ram: sys.total_memory(), apple_silicon: mac::core_layout().0 > 0 }
+    }
 }
 
 /// "/Applications/Google Chrome.app/Contents/..." -> "Google Chrome"
@@ -124,6 +148,8 @@ pub fn spawn(ctx: egui::Context) -> Receiver<Snapshot> {
                 rx_rate: rx_b as f64 / dt,
                 tx_rate: tx_b as f64 / dt,
                 pressure,
+                uptime: System::uptime(),
+                disk_name: disk.map(|d| d.name().to_string_lossy().into_owned()).filter(|n| !n.is_empty()).unwrap_or_else(|| "Startup disk".into()),
                 speed_limit,
                 battery: battery.clone(),
                 procs,

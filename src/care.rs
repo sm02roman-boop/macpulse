@@ -396,3 +396,25 @@ impl State {
         o
     }
 }
+
+impl State {
+    /// Called every frame from the app shell so the dashboard always has fresh numbers,
+    /// even when the Smart Care page is not open.
+    pub fn tick(&mut self, ctx: &egui::Context) {
+        if !self.started {
+            self.started = true;
+            self.scan(ctx);
+        }
+        self.poll(ctx);
+    }
+
+    /// (total reclaimable bytes, bytes that are safe to clear automatically, number of categories)
+    pub fn summary(&self) -> (u64, u64, usize) {
+        let total = self.rows.iter().map(|r| r.bytes).sum();
+        let safe = self.rows.iter().filter(|r| TARGETS[r.target].risk == Risk::Safe).map(|r| r.bytes).sum();
+        let mut cats: Vec<&str> = self.rows.iter().map(|r| TARGETS[r.target].category).collect();
+        cats.sort();
+        cats.dedup();
+        (total, safe, cats.len())
+    }
+}

@@ -3,7 +3,9 @@ mod ai;
 mod care;
 mod catalog;
 mod context;
+mod dashboard;
 mod disk;
+mod icons;
 mod leftovers;
 mod mac;
 mod monitor;
@@ -16,7 +18,8 @@ mod uninstall;
 mod util;
 mod widgets;
 
-use eframe::egui::{self, pos2, vec2, Color32, Painter, Pos2, Rect, RichText, Stroke, StrokeKind};
+use eframe::egui::{self, vec2, Color32, Rect, RichText, Stroke, StrokeKind};
+use icons::Icon;
 use std::sync::mpsc::Receiver;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -45,7 +48,7 @@ impl Page {
 
     fn title(self) -> &'static str {
         match self {
-            Page::Overview => "Overview",
+            Page::Overview => "Dashboard",
             Page::Memory => "Memory",
             Page::Cpu => "CPU",
             Page::Network => "Network",
@@ -63,7 +66,7 @@ impl Page {
 
     fn subtitle(self) -> &'static str {
         match self {
-            Page::Overview => "Live vitals for your Mac",
+            Page::Overview => "Your Mac at a glance",
             Page::Memory => "Where your RAM is going, grouped by app",
             Page::Cpu => "Core load and the busiest apps",
             Page::Network => "Live throughput, per app",
@@ -99,6 +102,43 @@ impl Page {
     fn key(self) -> &'static str {
         self.title()
     }
+
+    fn icon(self) -> Icon {
+        match self {
+            Page::Overview => Icon::Overview,
+            Page::Memory => Icon::Memory,
+            Page::Cpu => Icon::Cpu,
+            Page::Network => Icon::Network,
+            Page::Battery => Icon::Battery,
+            Page::Health => Icon::Health,
+            Page::SmartCare => Icon::SmartCare,
+            Page::Storage => Icon::Storage,
+            Page::Leftovers => Icon::Leftovers,
+            Page::Uninstaller => Icon::Uninstaller,
+            Page::Startup => Icon::Startup,
+            Page::Assistant => Icon::Assistant,
+            Page::AiSettings => Icon::AiSettings,
+        }
+    }
+
+    fn tint(self) -> Color32 {
+        let (r, g, b) = match self {
+            Page::Overview => (50, 120, 230),
+            Page::Memory => (150, 100, 235),
+            Page::Cpu => (70, 110, 235),
+            Page::Network => (40, 170, 190),
+            Page::Battery => (52, 170, 110),
+            Page::Health => (225, 90, 140),
+            Page::SmartCare => (34, 170, 130),
+            Page::Storage => (60, 130, 220),
+            Page::Leftovers => (235, 140, 60),
+            Page::Uninstaller => (225, 80, 80),
+            Page::Startup => (70, 180, 110),
+            Page::Assistant => (150, 100, 235),
+            Page::AiSettings => (110, 120, 150),
+        };
+        Color32::from_rgb(r, g, b)
+    }
 }
 
 struct App {
@@ -115,6 +155,7 @@ struct App {
     ai: ai::AiHub,
     tray: Option<tray::Tray>,
     sel_group: Option<String>,
+    machine: monitor::Machine,
 }
 
 impl App {
@@ -137,6 +178,33 @@ impl App {
             ai: ai::AiHub::new(),
             tray: tray::Tray::new(),
             sel_group: None,
+            machine: monitor::Machine::detect(),
+        }
+    }
+
+    /// Small live label shown at the right of a sidebar row.
+    fn badge(&self, p: Page) -> Option<(String, Color32)> {
+        let snap = &self.mon.snap;
+        let pct = |used: u64, total: u64| if total > 0 { used as f32 / total as f32 * 100.0 } else { 0.0 };
+        match p {
+            Page::Memory => {
+                let v = pct(snap.mem_used, snap.mem_total);
+                Some((format!("{v:.0}%"), widgets::level_color(v)))
+            }
+            Page::Cpu => Some((format!("{:.0}%", snap.cpu_total), widgets::level_color(snap.cpu_total))),
+            Page::SmartCare => {
+                let (total, _, _) = self.care.summary();
+                (total > 0).then(|| (util::size(total), theme::GOOD))
+            }
+            Page::Storage => (snap.disk_total > 0).then(|| (format!("{} free", util::size(snap.disk_free)), theme::MUTED)),
+            Page::Uninstaller => (self.uninstall.app_count() > 0).then(|| (self.uninstall.app_count().to_string(), theme::MUTED)),
+            Page::Network => ((snap.rx_rate + snap.tx_rate) > 1000.0).then(|| ("Active".to_string(), theme::MUTED)),
+            Page::Battery => snap.battery.as_ref().map(|b| (format!("{:.0}%", b.percent), theme::MUTED)),
+            Page::Health => {
+                let n = self.mon.findings.iter().filter(|f| f.severity != monitor::Severity::Ok).count();
+                (n > 0).then(|| (n.to_string(), theme::WARN))
+            }
+            _ => None,
         }
     }
 
@@ -144,37 +212,97 @@ impl App {
         ui.add_space(f32::from(theme::top_inset()) + 12.0);
         ui.horizontal(|ui| {
             let (r, _) = ui.allocate_exact_size(vec2(32.0, 32.0), egui::Sense::hover());
-            ui.painter().rect_filled(r, 10.0, theme::ACCENT);
-            ui.painter().rect_filled(Rect::from_min_size(r.min + vec2(2.0, 2.0), vec2(28.0, 6.0)), 4.0, crate::theme::veil(36));
-            draw_icon(ui.painter(), Page::Health, r.center(), Color32::WHITE);
+            icons::tile(ui.painter(), Icon::Health, r.center(), 32.0, theme::ACCENT);
             ui.label(RichText::new("MacPulse").size(20.0).strong());
         });
-        ui.add_space(8.0);
+        ui.add_space(2.0);
+        ui.spacing_mut().item_spacing.y = 3.0;
         for (section, pages) in Page::SECTIONS {
-            ui.add_space(10.0);
+            ui.add_space(8.0);
             ui.label(RichText::new(section).small().strong().color(theme::MUTED));
             for &p in pages {
-                let (rect, resp) = ui.allocate_exact_size(vec2(ui.available_width(), 36.0), egui::Sense::click());
+                let (rect, resp) = ui.allocate_exact_size(vec2(ui.available_width(), 34.0), egui::Sense::click());
                 let selected = self.page == p;
+                let badge = self.badge(p);
                 let painter = ui.painter();
                 if selected {
                     painter.rect_filled(rect, 10.0, theme::ACCENT.gamma_multiply(0.26));
-                    painter.rect_stroke(rect, 10.0, Stroke::new(1.0, theme::ACCENT.gamma_multiply(0.6)), StrokeKind::Inside);
+                    painter.rect_stroke(rect, 10.0, Stroke::new(1.0_f32, theme::ACCENT.gamma_multiply(0.6)), StrokeKind::Inside);
                 } else if resp.hovered() {
-                    painter.rect_filled(rect, 10.0, crate::theme::veil(12));
+                    painter.rect_filled(rect, 10.0, theme::veil(40));
                 }
-                let col = if selected { Color32::WHITE } else { Color32::from_rgb(190, 190, 214) };
-                draw_icon(painter, p, rect.left_center() + vec2(20.0, 0.0), if selected { theme::ACCENT_SOFT } else { col });
-                painter.text(rect.left_center() + vec2(40.0, 0.0), egui::Align2::LEFT_CENTER, p.title(), egui::FontId::proportional(14.5), col);
+                icons::tile(painter, p.icon(), rect.left_center() + vec2(21.0, 0.0), 24.0, p.tint());
+                let col = if selected { Color32::WHITE } else { Color32::from_rgb(205, 205, 224) };
+                painter.text(rect.left_center() + vec2(44.0, 0.0), egui::Align2::LEFT_CENTER, p.title(), egui::FontId::proportional(14.5), col);
+                if let Some((text, c)) = badge {
+                    let font = egui::FontId::proportional(11.5);
+                    let galley = painter.layout_no_wrap(text, font, c);
+                    let size = galley.size() + vec2(12.0, 5.0);
+                    let br = Rect::from_center_size(rect.right_center() - vec2(10.0 + size.x / 2.0, 0.0), size);
+                    painter.rect_filled(br, 8.0, c.gamma_multiply(0.18));
+                    painter.galley(br.center() - galley.size() / 2.0, galley, c);
+                }
                 if resp.clicked() {
                     self.page = p;
                 }
             }
         }
+
+        // Footer: reclaimable-space shortcut and machine card.
+        ui.add_space((ui.available_height() - 104.0).max(6.0));
+        let (total, _, _) = self.care.summary();
+        if total > 0 {
+            let (rect, resp) = ui.allocate_exact_size(vec2(ui.available_width(), 38.0), egui::Sense::click());
+            let c = Color32::from_rgb(30, 165, 120);
+            ui.painter().rect_filled(rect, 11.0, if resp.hovered() { c.gamma_multiply(1.15) } else { c });
+            ui.painter().text(rect.center(), egui::Align2::CENTER_CENTER, format!("{} ready to clean", util::size(total)), egui::FontId::proportional(14.0), Color32::WHITE);
+            if resp.on_hover_cursor(egui::CursorIcon::PointingHand).clicked() {
+                self.page = Page::SmartCare;
+            }
+            ui.add_space(8.0);
+        }
+        ui.horizontal(|ui| {
+            let (r, _) = ui.allocate_exact_size(vec2(34.0, 34.0), egui::Sense::hover());
+            ui.painter().circle_filled(r.center(), 17.0, theme::ACCENT.gamma_multiply(0.7));
+            let initials: String = self.machine.name.split_whitespace().filter_map(|w| w.chars().next()).take(2).collect::<String>().to_uppercase();
+            ui.painter().text(r.center(), egui::Align2::CENTER_CENTER, initials, egui::FontId::proportional(13.0), Color32::WHITE);
+            ui.vertical(|ui| {
+                ui.label(RichText::new(&self.machine.name).strong());
+                ui.label(RichText::new(format!("{} · {}", if self.machine.apple_silicon { "Apple Silicon" } else { "Intel Mac" }, self.machine.os)).small().color(theme::MUTED));
+            });
+        });
     }
 
     fn draw_page(&mut self, ui: &mut egui::Ui) {
         let page = self.page;
+        if page == Page::Overview {
+            ui.horizontal(|ui| {
+                ui.vertical(|ui| widgets::header(ui, page.title(), page.subtitle()));
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| dashboard::status_bar(ui, &self.mon));
+            });
+            let (total, safe, cats) = self.care.summary();
+            let summary = dashboard::CareSummary { total, safe, categories: cats };
+            let mut go = None;
+            egui::ScrollArea::vertical().show(ui, |ui| {
+                go = dashboard::show(ui, &self.mon, &self.machine, &summary);
+                ui.add_space(10.0);
+                if self.ai.card(ui, page.key(), page.hint(), || context::system(&self.mon, 8)) {
+                    self.page = Page::AiSettings;
+                }
+            });
+            if self.page != Page::AiSettings {
+                match go {
+                    Some(dashboard::Go::Memory) => self.page = Page::Memory,
+                    Some(dashboard::Go::Cpu) => self.page = Page::Cpu,
+                    Some(dashboard::Go::Storage) => self.page = Page::Storage,
+                    Some(dashboard::Go::Battery) => self.page = Page::Battery,
+                    Some(dashboard::Go::Network) => self.page = Page::Network,
+                    Some(dashboard::Go::SmartCare) => self.page = Page::SmartCare,
+                    None => {}
+                }
+            }
+            return;
+        }
         widgets::header(ui, page.title(), page.subtitle());
         match page {
             Page::Assistant => {
@@ -208,7 +336,7 @@ impl App {
             self.page = Page::AiSettings;
         }
         match page {
-            Page::Overview => pages::overview(ui, &self.mon),
+            Page::Overview => {}
             Page::Memory => pages::memory(ui, &self.mon, &mut self.sel_group),
             Page::Cpu => pages::cpu(ui, &self.mon),
             Page::Network => pages::network(ui, &self.mon, &mut self.net),
@@ -222,102 +350,6 @@ impl App {
             Page::Uninstaller => self.uninstall.show(ui),
             Page::Startup => self.agents.show(ui),
             Page::Assistant | Page::AiSettings => {}
-        }
-    }
-}
-
-/// Small vector icons drawn with the painter (no font or image dependencies).
-fn draw_icon(p: &Painter, page: Page, c: Pos2, col: Color32) {
-    let st = Stroke::new(1.6, col);
-    let line = |a: Pos2, b: Pos2| p.line_segment([c + a.to_vec2(), c + b.to_vec2()], st);
-    let rect = |w: f32, h: f32, r: f32| p.rect_stroke(Rect::from_center_size(c, vec2(w, h)), r, st, StrokeKind::Middle);
-    match page {
-        Page::Overview => {
-            for (dx, dy) in [(-4.5, -4.5), (4.5, -4.5), (-4.5, 4.5), (4.5, 4.5)] {
-                p.rect_stroke(Rect::from_center_size(c + vec2(dx, dy), vec2(6.0, 6.0)), 1.5, st, StrokeKind::Middle);
-            }
-        }
-        Page::Memory => {
-            rect(14.0, 8.0, 2.0);
-            for x in [-4.0, 0.0, 4.0] {
-                line(pos2(x, -4.0), pos2(x, -7.0));
-                line(pos2(x, 4.0), pos2(x, 7.0));
-            }
-        }
-        Page::Cpu => {
-            rect(11.0, 11.0, 2.5);
-            p.rect_filled(Rect::from_center_size(c, vec2(4.0, 4.0)), 1.0, col);
-            for v in [-3.0, 3.0] {
-                line(pos2(v, -5.5), pos2(v, -8.0));
-                line(pos2(v, 5.5), pos2(v, 8.0));
-                line(pos2(-5.5, v), pos2(-8.0, v));
-                line(pos2(5.5, v), pos2(8.0, v));
-            }
-        }
-        Page::Network => {
-            line(pos2(-4.0, 7.0), pos2(-4.0, -6.0));
-            line(pos2(-4.0, -7.0), pos2(-7.0, -3.5));
-            line(pos2(-4.0, -7.0), pos2(-1.0, -3.5));
-            line(pos2(4.0, -7.0), pos2(4.0, 6.0));
-            line(pos2(4.0, 7.0), pos2(1.0, 3.5));
-            line(pos2(4.0, 7.0), pos2(7.0, 3.5));
-        }
-        Page::Battery => {
-            p.rect_stroke(Rect::from_center_size(c + vec2(-1.0, 0.0), vec2(14.0, 8.5)), 2.0, st, StrokeKind::Middle);
-            p.rect_filled(Rect::from_center_size(c + vec2(7.5, 0.0), vec2(2.0, 4.0)), 1.0, col);
-            p.rect_filled(Rect::from_center_size(c + vec2(-3.0, 0.0), vec2(7.0, 4.5)), 1.0, col);
-        }
-        Page::Health => {
-            let pts = [(-8.0, 0.5), (-4.0, 0.5), (-2.0, -6.0), (1.0, 6.0), (3.0, 0.5), (8.0, 0.5)];
-            for w in pts.windows(2) {
-                line(pos2(w[0].0, w[0].1), pos2(w[1].0, w[1].1));
-            }
-        }
-        Page::SmartCare => {
-            let pts: Vec<Pos2> = [(0.0, -8.0), (2.0, -2.0), (8.0, 0.0), (2.0, 2.0), (0.0, 8.0), (-2.0, 2.0), (-8.0, 0.0), (-2.0, -2.0)]
-                .iter()
-                .map(|(x, y)| c + vec2(*x, *y))
-                .collect();
-            p.add(egui::Shape::convex_polygon(pts, col, Stroke::NONE));
-        }
-        Page::Storage => {
-            p.circle_stroke(c, 7.5, st);
-            p.circle_stroke(c, 2.5, st);
-            line(pos2(2.5, -2.5), pos2(6.0, -6.0));
-        }
-        Page::Leftovers => {
-            p.rect_stroke(Rect::from_center_size(c + vec2(0.0, 1.5), vec2(11.0, 11.0)), 2.0, st, StrokeKind::Middle);
-            line(pos2(-7.0, -5.0), pos2(7.0, -5.0));
-            line(pos2(-2.5, -5.0), pos2(-2.5, -7.5));
-            line(pos2(2.5, -5.0), pos2(2.5, -7.5));
-            line(pos2(-2.5, -1.0), pos2(-2.5, 5.0));
-            line(pos2(2.5, -1.0), pos2(2.5, 5.0));
-        }
-        Page::Uninstaller => {
-            rect(13.0, 13.0, 3.0);
-            line(pos2(-3.5, -3.5), pos2(3.5, 3.5));
-            line(pos2(3.5, -3.5), pos2(-3.5, 3.5));
-        }
-        Page::Startup => {
-            let pts: Vec<Pos2> = (0..=36)
-                .map(|i| {
-                    let a = (-60.0_f32 + 300.0 * i as f32 / 36.0 - 90.0).to_radians();
-                    c + vec2(a.cos(), a.sin()) * 7.0
-                })
-                .collect();
-            p.add(egui::Shape::line(pts, st));
-            line(pos2(0.0, -8.5), pos2(0.0, -1.0));
-        }
-        Page::Assistant => {
-            p.rect_stroke(Rect::from_center_size(c + vec2(0.0, -1.0), vec2(15.0, 10.5)), 3.0, st, StrokeKind::Middle);
-            line(pos2(-3.0, 4.5), pos2(-5.5, 8.0));
-            line(pos2(-3.0, 4.5), pos2(1.0, 4.5));
-        }
-        Page::AiSettings => {
-            for (y, x) in [(-5.0, -3.0), (0.0, 3.0), (5.0, -1.0)] {
-                line(pos2(-8.0, y), pos2(8.0, y));
-                p.circle_filled(c + vec2(x, y), 2.4, col);
-            }
         }
     }
 }
@@ -346,10 +378,11 @@ impl eframe::App for App {
                 }
             }
         }
+        self.care.tick(ctx);
         egui::SidePanel::left("nav")
             .exact_width(220.0)
             .resizable(false)
-            .frame(egui::Frame::new().fill(theme::sidebar_fill()).stroke(Stroke::new(1.0, crate::theme::veil(14))).inner_margin(egui::Margin::symmetric(12, 0)))
+            .frame(egui::Frame::new().fill(theme::sidebar_fill()).stroke(Stroke::new(1.0_f32, crate::theme::veil(14))).inner_margin(egui::Margin::symmetric(12, 0)))
             .show(ctx, |ui| self.nav(ui));
         let margin = egui::Margin { left: 24, right: 24, top: 18 + theme::top_inset(), bottom: 16 };
         egui::CentralPanel::default()
@@ -369,7 +402,7 @@ fn main() -> eframe::Result<()> {
     #[allow(unused_mut)]
     let mut viewport = egui::ViewportBuilder::default()
         .with_inner_size([1180.0, 780.0])
-        .with_min_inner_size([960.0, 640.0])
+        .with_min_inner_size([960.0, 720.0])
         .with_title("MacPulse");
     #[cfg(target_os = "macos")]
     {
@@ -406,6 +439,8 @@ mod smoke {
             rx_rate: 1e6,
             tx_rate: 2e5,
             pressure: 2,
+            uptime: 9000,
+            disk_name: "Macintosh HD".into(),
             speed_limit: Some(85),
             battery: Some(mac::Battery { percent: 70.0, health_percent: Some(76.0), watts: Some(-8.0), ..Default::default() }),
             procs,
@@ -433,6 +468,7 @@ mod smoke {
             ai: ai::AiHub::new(),
             tray: None,
             sel_group: Some("App 3".into()),
+            machine: monitor::Machine::detect(),
         }
     }
 
