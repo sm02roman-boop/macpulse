@@ -68,6 +68,12 @@ impl Settings {
         *self = Self { api_key: String::new(), ..Self::default() };
     }
 
+    /// Any hosted OpenAI-compatible service (Groq, Gemini, OpenRouter...). The key belongs to
+    /// one provider, so it is cleared when switching.
+    pub fn use_hosted(&mut self, base_url: &str, model: &str) {
+        *self = Self { base_url: base_url.into(), model: model.into(), api_key: String::new(), kind: "openai".into() };
+    }
+
     pub fn use_claude(&mut self) {
         self.kind = "anthropic".into();
         self.base_url = CLAUDE_URL.into();
@@ -212,8 +218,10 @@ pub fn list_models(s: &Settings) -> Result<Vec<String>, String> {
     match req.call() {
         Ok(r) => {
             let v: Value = r.into_json().map_err(|e| e.to_string())?;
-            let mut out: Vec<String> =
-                v["data"].as_array().map(|a| a.iter().filter_map(|m| m["id"].as_str().map(str::to_owned)).collect()).unwrap_or_default();
+            let mut out: Vec<String> = v["data"]
+                .as_array()
+                .map(|a| a.iter().filter_map(|m| m["id"].as_str().map(|id| id.strip_prefix("models/").unwrap_or(id).to_owned())).collect())
+                .unwrap_or_default();
             out.sort();
             Ok(out)
         }
@@ -424,6 +432,24 @@ impl AiHub {
                     self.status = None;
                 }
             });
+            ui.horizontal(|ui| {
+                ui.label("Free hosted");
+                let mut hosted: Option<(&str, &str)> = None;
+                if ui.button("Groq").clicked() {
+                    hosted = Some(("https://api.groq.com/openai/v1", "llama-3.3-70b-versatile"));
+                }
+                if ui.button("Google Gemini").clicked() {
+                    hosted = Some(("https://generativelanguage.googleapis.com/v1beta/openai", "gemini-2.5-flash"));
+                }
+                if ui.button("OpenRouter (free models)").clicked() {
+                    hosted = Some(("https://openrouter.ai/api/v1", "openrouter/free"));
+                }
+                if let Some((url, model)) = hosted {
+                    self.settings.use_hosted(url, model);
+                    self.models.clear();
+                    self.status = None;
+                }
+            });
             egui::Grid::new("ai-settings").num_columns(2).spacing([12.0, 10.0]).show(ui, |ui| {
                 ui.label("Server URL");
                 ui.add(egui::TextEdit::singleline(&mut self.settings.base_url).desired_width(380.0));
@@ -465,6 +491,14 @@ impl AiHub {
             if !self.settings.is_local() {
                 ui.label(RichText::new("This server is not on your Mac. When you click an Explain button, the page's diagnostic data (app names, file names, sizes) is sent to it.").color(theme::WARN));
             }
+        });
+        ui.add_space(8.0);
+        crate::widgets::card(ui, "Free hosted AI (no credit card)", |ui| {
+            ui.label("Groq — very fast.  Key at  console.groq.com/keys");
+            ui.label("Google Gemini — strong quality.  Key at  aistudio.google.com/apikey");
+            ui.label("OpenRouter — many free models with one key.  Key at  openrouter.ai/keys");
+            ui.label("Click a preset above, paste the key, press Save & test, then pick a model from the Installed… list if the default is not available.");
+            ui.label(RichText::new("Free tiers have rate limits that change over time, and some providers may use free-tier prompts to improve their products. The page's app names and file names are sent to the provider when you click Explain. Ollama is the only option that stays fully on your Mac.").color(theme::MUTED));
         });
         ui.add_space(8.0);
         crate::widgets::card(ui, "Use Claude", |ui| {
@@ -658,6 +692,14 @@ mod tests {
         let s = Settings { base_url: "http://127.0.0.1:9/v1".into(), ..Default::default() };
         let e = chat(&s, &[("user".into(), "x".into())]).unwrap_err();
         assert!(e.contains("Can't reach"), "{e}");
+    }
+
+    #[test]
+    fn hosted_preset_resets_key_and_is_remote() {
+        let mut s = Settings { api_key: "old".into(), ..Default::default() };
+        s.use_hosted("https://api.groq.com/openai/v1", "m");
+        assert!(s.api_key.is_empty() && !s.is_local() && !s.is_claude());
+        assert_eq!(s.host(), "api.groq.com");
     }
 
     #[test]
