@@ -3,9 +3,9 @@ use std::collections::VecDeque;
 
 pub fn card<R>(ui: &mut Ui, title: &str, add: impl FnOnce(&mut Ui) -> R) -> R {
     egui::Frame::new()
-        .fill(crate::theme::CARD)
-        .stroke(Stroke::new(1.0, crate::theme::BORDER))
-        .corner_radius(14)
+        .fill(crate::theme::card_fill())
+        .stroke(Stroke::new(1.0, crate::theme::card_border()))
+        .corner_radius(16)
         .inner_margin(14)
         .show(ui, |ui| {
             ui.set_width(ui.available_width());
@@ -50,7 +50,8 @@ pub fn sparkline(ui: &mut Ui, vals: &VecDeque<f32>, max: Option<f32>, color: Col
         mesh.add_triangle(i, i + 2, i + 3);
     }
     p.add(Shape::mesh(mesh));
-    p.add(Shape::line(pts, Stroke::new(1.5_f32, color)));
+    p.add(Shape::line(pts.clone(), Stroke::new(6.0_f32, color.gamma_multiply(0.12))));
+    p.add(Shape::line(pts, Stroke::new(1.8_f32, color)));
 }
 
 pub fn ring(ui: &mut Ui, frac: f32, label: &str, color: Color32) {
@@ -73,6 +74,7 @@ pub fn ring(ui: &mut Ui, frac: f32, label: &str, color: Color32) {
     p.add(Shape::line(arc(start, start + full), Stroke::new(8.0_f32, color.gamma_multiply(0.15))));
     let f = frac.clamp(0.0, 1.0);
     if f > 0.002 {
+        p.add(Shape::line(arc(start, start + full * f), Stroke::new(15.0_f32, color.gamma_multiply(0.14))));
         p.add(Shape::line(arc(start, start + full * f), Stroke::new(8.0_f32, color)));
     }
     p.text(c, egui::Align2::CENTER_CENTER, label, egui::FontId::proportional(17.0), ui.visuals().strong_text_color());
@@ -100,5 +102,30 @@ pub const TEAL: Color32 = Color32::from_rgb(60, 180, 190);
 pub const ORANGE: Color32 = Color32::from_rgb(235, 140, 60);
 
 pub fn bar(ui: &mut Ui, frac: f32, text: String, color: Color32) {
-    ui.add(egui::ProgressBar::new(frac.clamp(0.0, 1.0)).fill(color).text(text));
+    let h = 24.0;
+    let (rect, _) = ui.allocate_exact_size(vec2(ui.available_width(), h), Sense::hover());
+    let p = ui.painter_at(rect);
+    p.rect_filled(rect, h / 2.0, Color32::from_white_alpha(14));
+    let frac = frac.clamp(0.0, 1.0);
+    if frac > 0.0 {
+        let w = (rect.width() * frac).max(h).min(rect.width());
+        let fill = egui::Rect::from_min_size(rect.min, vec2(w, h));
+        p.rect_filled(fill, h / 2.0, color.gamma_multiply(0.85));
+        p.rect_filled(egui::Rect::from_min_size(fill.min + vec2(3.0, 2.5), vec2((w - 8.0).max(0.0), 5.0)), 3.0, Color32::from_white_alpha(22));
+    }
+    let font = egui::FontId::proportional(12.5);
+    p.text(rect.left_center() + vec2(11.0, 1.0), egui::Align2::LEFT_CENTER, &text, font.clone(), Color32::from_black_alpha(150));
+    p.text(rect.left_center() + vec2(11.0, 0.0), egui::Align2::LEFT_CENTER, text, font, Color32::WHITE);
+}
+
+/// Accent button with a glossy top highlight.
+pub fn primary(ui: &mut Ui, text: &str) -> egui::Response {
+    let galley = ui.painter().layout_no_wrap(text.to_owned(), egui::FontId::proportional(14.0), Color32::WHITE);
+    let (rect, resp) = ui.allocate_exact_size(galley.size() + vec2(30.0, 14.0), Sense::click());
+    let base = if resp.hovered() { crate::theme::ACCENT.gamma_multiply(1.15) } else { crate::theme::ACCENT };
+    let p = ui.painter();
+    p.rect_filled(rect, 10.0, base);
+    p.rect_filled(egui::Rect::from_min_size(rect.min + vec2(2.0, 2.0), vec2(rect.width() - 4.0, 6.0)), 4.0, Color32::from_white_alpha(26));
+    p.galley(rect.center() - galley.size() / 2.0, galley, Color32::WHITE);
+    resp
 }

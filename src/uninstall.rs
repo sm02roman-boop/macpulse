@@ -207,7 +207,7 @@ impl State {
                                 ui.checkbox(&mut r.selected, "");
                                 ui.vertical(|ui| {
                                     ui.label(r.path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default());
-                                    ui.label(RichText::new(r.label).small().weak());
+                                    ui.label(RichText::new(r.label).small().color(crate::theme::MUTED));
                                 });
                                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| ui.label(util::size(r.bytes)));
                             });

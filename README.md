@@ -55,6 +55,12 @@ the API is billed separately by usage. The key is stored in `~/.macpulse/setting
 
 Not Apple's on-device model: that framework is Swift-only and needs macOS 26 on Apple Silicon.
 
+## Appearance
+
+On macOS the window uses a glass look: the system blur behind the window, frosted cards and a title bar
+merged into the content. If it looks wrong on your Mac, open **AI Settings > Appearance**, untick
+*Glass window* and restart for a solid dark window.
+
 ## Permissions
 
 For Storage and Leftovers to see everything in `~/Library`, grant **Full Disk Access**:

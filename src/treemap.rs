@@ -85,11 +85,12 @@ pub fn show(ui: &mut Ui, items: &[Item], selected: Option<&str>, height: f32) ->
             continue;
         }
         let resp = ui.interact(r, ui.id().with(&item.id), Sense::click());
-        let base: Color32 = Hsva::new(hue(&item.label), 0.45, 0.62, 1.0).into();
+        let base: Color32 = Hsva::new(hue(&item.label), 0.55, 0.52, 1.0).into();
         let is_sel = selected == Some(item.id.as_str());
         let fill = if resp.hovered() { base.gamma_multiply(1.2) } else { base };
         let p = ui.painter().with_clip_rect(r);
-        p.rect_filled(r, 4.0, fill);
+        p.rect_filled(r, 6.0, fill);
+        ui.painter().rect_stroke(r, 6.0, Stroke::new(1.0, Color32::from_white_alpha(44)), egui::StrokeKind::Inside);
         if is_sel {
             ui.painter().rect_stroke(r, 4.0, Stroke::new(2.5_f32, Color32::WHITE), egui::StrokeKind::Inside);
         }

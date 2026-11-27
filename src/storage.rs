@@ -117,7 +117,7 @@ impl State {
         self.poll();
 
         ui.horizontal(|ui| {
-            if ui.add_enabled(!self.stack.is_empty(), egui::Button::new("◀ Back")).clicked() {
+            if ui.add_enabled(!self.stack.is_empty(), egui::Button::new("Back")).clicked() {
                 if let Some(p) = self.stack.pop() {
                     self.go(&ctx, p, false);
                 }
@@ -140,7 +140,7 @@ impl State {
                     self.status = "Not a folder".into();
                 }
             }
-            if ui.button("↻ Rescan").clicked() {
+            if ui.button("Rescan").clicked() {
                 self.scan(&ctx);
             }
             if self.scanning {

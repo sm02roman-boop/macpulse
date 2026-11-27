@@ -230,7 +230,7 @@ impl State {
                 if ui.add_enabled(!self.busy && sel_total > 0, egui::Button::new(label)).clicked() {
                     self.confirm = true;
                 }
-                if ui.add_enabled(!self.busy, egui::Button::new("↻ Rescan")).clicked() {
+                if ui.add_enabled(!self.busy, egui::Button::new("Rescan")).clicked() {
                     self.scan(&ctx);
                 }
             });
@@ -240,32 +240,39 @@ impl State {
 
         egui::ScrollArea::vertical().show(ui, |ui| {
             let mut toggled_ignore: Option<&'static str> = None;
-            let mut last_cat = "";
-            for r in self.rows.iter_mut() {
-                let t = &TARGETS[r.target];
-                if t.category != last_cat {
-                    last_cat = t.category;
-                    ui.add_space(8.0);
-                    ui.label(RichText::new(t.category).strong());
+            let mut cats: Vec<&'static str> = vec![];
+            for r in &self.rows {
+                let c = TARGETS[r.target].category;
+                if !cats.contains(&c) {
+                    cats.push(c);
                 }
-                ui.horizontal(|ui| {
-                    ui.checkbox(&mut r.selected, "");
-                    ui.vertical(|ui| {
+            }
+            for cat in cats {
+                let total: u64 = self.rows.iter().filter(|r| TARGETS[r.target].category == cat).map(|r| r.bytes).sum();
+                crate::widgets::card(ui, &format!("{cat}  ·  {}", util::size(total)), |ui| {
+                    for r in self.rows.iter_mut().filter(|r| TARGETS[r.target].category == cat) {
+                        let t = &TARGETS[r.target];
                         ui.horizontal(|ui| {
-                            ui.label(t.name);
-                            if t.risk == Risk::Review {
-                                ui.label(RichText::new("REVIEW").small().color(Color32::from_rgb(235, 170, 60)));
-                            }
+                            ui.checkbox(&mut r.selected, "");
+                            ui.vertical(|ui| {
+                                ui.horizontal(|ui| {
+                                    ui.label(t.name);
+                                    if t.risk == Risk::Review {
+                                        ui.label(RichText::new("REVIEW").small().strong().color(Color32::from_rgb(235, 170, 60)));
+                                    }
+                                });
+                                ui.label(RichText::new(t.note).small().color(crate::theme::MUTED));
+                            });
+                            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                                ui.label(RichText::new(util::size(r.bytes)).strong());
+                                if ui.small_button("Ignore").on_hover_text("Never scan or clean this item").clicked() {
+                                    toggled_ignore = Some(t.id);
+                                }
+                            });
                         });
-                        ui.label(RichText::new(t.note).small().weak());
-                    });
-                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        ui.label(RichText::new(util::size(r.bytes)).strong());
-                        if ui.small_button("Ignore").on_hover_text("Never scan or clean this item").clicked() {
-                            toggled_ignore = Some(t.id);
-                        }
-                    });
+                    }
                 });
+                ui.add_space(6.0);
             }
             if let Some(id) = toggled_ignore {
                 self.ignored.insert(id.to_string());
@@ -282,7 +289,7 @@ impl State {
             ui.horizontal(|ui| {
                 ui.vertical(|ui| {
                     ui.label(RichText::new("Trash").strong());
-                    ui.label(RichText::new("Space from cleaned items is only freed once the Trash is emptied.").small().weak());
+                    ui.label(RichText::new("Space from cleaned items is only freed once the Trash is emptied.").small().color(crate::theme::MUTED));
                 });
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     if ui.add_enabled(!self.busy && self.trash_bytes > 0, egui::Button::new(format!("Empty Trash ({})…", util::size(self.trash_bytes)))).clicked() {
@@ -296,7 +303,7 @@ impl State {
                 ui.horizontal(|ui| {
                     ui.vertical(|ui| {
                         ui.label(c.title);
-                        ui.label(RichText::new(c.detail).small().weak());
+                        ui.label(RichText::new(c.detail).small().color(crate::theme::MUTED));
                     });
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                         if ui.add_enabled(!self.busy, egui::Button::new("Run")).clicked() {

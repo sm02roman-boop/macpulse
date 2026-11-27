@@ -34,11 +34,13 @@ pub fn overview(ui: &mut Ui, m: &MonState) {
         ui.add_space(8.0);
         ui.columns(2, |c| {
             card(&mut c[0], "Network", |ui| {
-                ui.label(format!("↓ {}    ↑ {}", util::rate(s.rx_rate), util::rate(s.tx_rate)));
+                ui.set_min_height(158.0);
+                ui.label(format!("Down {}    Up {}", util::rate(s.rx_rate), util::rate(s.tx_rate)));
                 sparkline(ui, &m.rx, None, TEAL, 40.0);
                 sparkline(ui, &m.tx, None, ORANGE, 40.0);
             });
             card(&mut c[1], "Startup disk", |ui| {
+                ui.set_min_height(158.0);
                 let used = s.disk_total.saturating_sub(s.disk_free);
                 let p = pct(used, s.disk_total);
                 bar(ui, p / 100.0, format!("{} used of {}", util::size(used), util::size(s.disk_total)), level_color(p));
@@ -134,7 +136,7 @@ pub fn cpu(ui: &mut Ui, m: &MonState) {
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| ui.label(format!("{:.1}%", g.cpu)));
                 });
             }
-            ui.label(RichText::new("100% = one fully busy core, so multi-threaded apps can exceed 100%.").small().weak());
+            ui.label(RichText::new("100% = one fully busy core, so multi-threaded apps can exceed 100%.").small().color(crate::theme::MUTED));
         });
     });
 }
@@ -175,7 +177,7 @@ pub fn network(ui: &mut Ui, m: &MonState, st: &mut NetState) {
     }
     ctx.request_repaint_after(Duration::from_secs(1));
 
-    card(ui, &format!("Total  ↓ {}   ↑ {}", util::rate(m.snap.rx_rate), util::rate(m.snap.tx_rate)), |ui| {
+    card(ui, &format!("Total   Down {}   Up {}", util::rate(m.snap.rx_rate), util::rate(m.snap.tx_rate)), |ui| {
         sparkline(ui, &m.rx, None, TEAL, 50.0);
         sparkline(ui, &m.tx, None, ORANGE, 50.0);
     });
@@ -195,7 +197,7 @@ pub fn network(ui: &mut Ui, m: &MonState, st: &mut NetState) {
             ui.horizontal(|ui| {
                 ui.label(name);
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    ui.label(format!("↓ {}   ↑ {}", util::rate(*i), util::rate(*o)));
+                    ui.label(format!("Down {}   Up {}", util::rate(*i), util::rate(*o)));
                 });
             });
         }
@@ -275,13 +277,13 @@ pub fn battery(ui: &mut Ui, m: &MonState, en: &mut EnergyState) {
 pub fn health(ui: &mut Ui, m: &MonState) {
     for f in &m.findings {
         let (icon, color) = match f.severity {
-            Severity::Critical => ("●", Color32::from_rgb(232, 90, 79)),
-            Severity::Warn => ("●", Color32::from_rgb(235, 170, 60)),
-            Severity::Ok => ("●", Color32::from_rgb(80, 170, 120)),
+            Severity::Critical => ("•", Color32::from_rgb(232, 90, 79)),
+            Severity::Warn => ("•", Color32::from_rgb(235, 170, 60)),
+            Severity::Ok => ("•", Color32::from_rgb(80, 170, 120)),
         };
         card(ui, "", |ui| {
             ui.horizontal(|ui| {
-                ui.label(RichText::new(icon).color(color).size(18.0));
+                ui.label(RichText::new(icon).color(color).size(30.0));
                 ui.vertical(|ui| {
                     ui.label(RichText::new(&f.title).strong());
                     ui.label(&f.detail);

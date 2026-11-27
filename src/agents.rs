@@ -71,7 +71,7 @@ impl State {
         }
         let broken = self.items.iter().filter(|a| a.missing).count();
         ui.horizontal(|ui| {
-            if ui.button("↻ Rescan").clicked() {
+            if ui.button("Rescan").clicked() {
                 self.items = scan();
             }
         });
@@ -91,10 +91,10 @@ impl State {
                                 ui.label(RichText::new("BROKEN").small().color(Color32::from_rgb(232, 90, 79)));
                             }
                             if !a.user_owned {
-                                ui.label(RichText::new("system-wide").small().weak());
+                                ui.label(RichText::new("system-wide").small().color(crate::theme::MUTED));
                             }
                         });
-                        ui.label(RichText::new(a.program.clone().unwrap_or_else(|| "(no program)".into())).small().weak());
+                        ui.label(RichText::new(a.program.clone().unwrap_or_else(|| "(no program)".into())).small().color(crate::theme::MUTED));
                     });
                     if a.user_owned && a.missing {
                         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {

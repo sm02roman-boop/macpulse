@@ -180,7 +180,7 @@ impl State {
                 if ui.add_enabled(!self.busy && sel > 0, egui::Button::new(format!("Move {} to Trash…", util::size(sel)))).clicked() {
                     self.confirm = true;
                 }
-                if ui.add_enabled(!self.busy, egui::Button::new("↻ Rescan")).clicked() {
+                if ui.add_enabled(!self.busy, egui::Button::new("Rescan")).clicked() {
                     self.scan(&ctx);
                 }
             });
@@ -193,7 +193,7 @@ impl State {
                     ui.checkbox(&mut it.selected, "");
                     ui.vertical(|ui| {
                         ui.label(&it.bundle_id);
-                        ui.label(RichText::new(format!("{} · {}", it.location, it.path.display())).small().weak());
+                        ui.label(RichText::new(format!("{} · {}", it.location, it.path.display())).small().color(crate::theme::MUTED));
                     });
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                         ui.label(RichText::new(util::size(it.bytes)).strong());

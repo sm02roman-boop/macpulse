@@ -327,7 +327,7 @@ impl AiHub {
         let busy = panel.rx.is_some();
         let (mut start, mut open_settings) = (false, false);
         egui::Frame::new()
-            .fill(Color32::from_rgb(38, 30, 62))
+            .fill(theme::ai_fill())
             .stroke(Stroke::new(1.0, theme::ACCENT.gamma_multiply(0.6)))
             .corner_radius(14)
             .inner_margin(14)
@@ -351,7 +351,7 @@ impl AiHub {
                     if busy {
                         ui.spinner();
                         ui.label("Thinking…");
-                    } else if ui.add(egui::Button::new(RichText::new("Explain with AI  →").strong()).fill(theme::ACCENT)).clicked() {
+                    } else if crate::widgets::primary(ui, "Explain with AI").clicked() {
                         start = true;
                     }
                     if panel.text.is_some() && !busy {
@@ -474,7 +474,7 @@ impl AiHub {
                 ui.end_row();
             });
             ui.horizontal(|ui| {
-                if ui.add(egui::Button::new(RichText::new("Save & test").strong()).fill(theme::ACCENT)).clicked() {
+                if crate::widgets::primary(ui, "Save & test").clicked() {
                     self.settings.save();
                     self.fetch_models(&ctx);
                 }
@@ -557,7 +557,7 @@ impl AiHub {
             for (role, text) in &self.chat.log {
                 let user = role == "user";
                 egui::Frame::new()
-                    .fill(if user { theme::ACCENT.gamma_multiply(0.35) } else { theme::CARD })
+                    .fill(if user { theme::ACCENT.gamma_multiply(0.35) } else { theme::card_fill() })
                     .corner_radius(12)
                     .inner_margin(10)
                     .show(ui, |ui| {
