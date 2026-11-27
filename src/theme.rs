@@ -7,25 +7,31 @@ pub fn set_glass(on: bool) {
     GLASS.store(on, Ordering::Relaxed);
 }
 
+/// Translucent white for fills and strokes. Measured: the renderer shows plain `from_white_alpha(n)`
+/// about 4x stronger than n/255, so scale it down to get the intended subtle frosted look.
+pub fn veil(a: u8) -> Color32 {
+    Color32::from_white_alpha(((a as f32) * 0.26).round() as u8)
+}
+
 pub fn glass() -> bool {
     GLASS.load(Ordering::Relaxed)
 }
 
 /// Frosted card: a faint white veil over whatever is behind. Opaque when glass is off.
 pub fn card_fill() -> Color32 {
-    if glass() { Color32::from_white_alpha(14) } else { CARD }
+    if glass() { veil(14) } else { CARD }
 }
 
 pub fn card_border() -> Color32 {
-    if glass() { Color32::from_white_alpha(34) } else { BORDER }
+    if glass() { veil(34) } else { BORDER }
 }
 
 pub fn sidebar_fill() -> Color32 {
-    if glass() { Color32::from_rgba_unmultiplied(8, 8, 16, 150) } else { BG }
+    if glass() { Color32::from_rgb(11, 11, 19) } else { BG }
 }
 
 pub fn content_fill() -> Color32 {
-    if glass() { Color32::from_rgba_unmultiplied(16, 16, 28, 120) } else { PANEL }
+    if glass() { Color32::from_rgb(17, 17, 27) } else { PANEL }
 }
 
 pub fn ai_fill() -> Color32 {
@@ -90,11 +96,11 @@ pub fn apply(ctx: &egui::Context) {
         w.corner_radius = r;
     }
     v.widgets.noninteractive.bg_stroke = Stroke::new(1.0, card_border());
-    let btn = if glass() { Color32::from_white_alpha(20) } else { Color32::from_rgb(44, 44, 62) };
-    let btn_hover = if glass() { Color32::from_white_alpha(38) } else { Color32::from_rgb(62, 56, 94) };
+    let btn = if glass() { veil(20) } else { Color32::from_rgb(44, 44, 62) };
+    let btn_hover = if glass() { veil(38) } else { Color32::from_rgb(62, 56, 94) };
     v.widgets.inactive.bg_fill = btn;
     v.widgets.inactive.weak_bg_fill = btn;
-    v.widgets.inactive.bg_stroke = Stroke::new(1.0, Color32::from_white_alpha(if glass() { 26 } else { 0 }));
+    v.widgets.inactive.bg_stroke = Stroke::new(1.0, veil(if glass() { 26 } else { 0 }));
     v.widgets.hovered.bg_fill = btn_hover;
     v.widgets.hovered.weak_bg_fill = btn_hover;
     v.widgets.active.bg_fill = ACCENT;

@@ -105,13 +105,13 @@ pub fn bar(ui: &mut Ui, frac: f32, text: String, color: Color32) {
     let h = 24.0;
     let (rect, _) = ui.allocate_exact_size(vec2(ui.available_width(), h), Sense::hover());
     let p = ui.painter_at(rect);
-    p.rect_filled(rect, h / 2.0, Color32::from_white_alpha(14));
+    p.rect_filled(rect, h / 2.0, crate::theme::veil(14));
     let frac = frac.clamp(0.0, 1.0);
     if frac > 0.0 {
         let w = (rect.width() * frac).max(h).min(rect.width());
         let fill = egui::Rect::from_min_size(rect.min, vec2(w, h));
         p.rect_filled(fill, h / 2.0, color.gamma_multiply(0.85));
-        p.rect_filled(egui::Rect::from_min_size(fill.min + vec2(3.0, 2.5), vec2((w - 8.0).max(0.0), 5.0)), 3.0, Color32::from_white_alpha(22));
+        p.rect_filled(egui::Rect::from_min_size(fill.min + vec2(3.0, 2.5), vec2((w - 8.0).max(0.0), 5.0)), 3.0, crate::theme::veil(22));
     }
     let font = egui::FontId::proportional(12.5);
     p.text(rect.left_center() + vec2(11.0, 1.0), egui::Align2::LEFT_CENTER, &text, font.clone(), Color32::from_black_alpha(150));
@@ -125,7 +125,7 @@ pub fn primary(ui: &mut Ui, text: &str) -> egui::Response {
     let base = if resp.hovered() { crate::theme::ACCENT.gamma_multiply(1.15) } else { crate::theme::ACCENT };
     let p = ui.painter();
     p.rect_filled(rect, 10.0, base);
-    p.rect_filled(egui::Rect::from_min_size(rect.min + vec2(2.0, 2.0), vec2(rect.width() - 4.0, 6.0)), 4.0, Color32::from_white_alpha(26));
+    p.rect_filled(egui::Rect::from_min_size(rect.min + vec2(2.0, 2.0), vec2(rect.width() - 4.0, 6.0)), 4.0, crate::theme::veil(26));
     p.galley(rect.center() - galley.size() / 2.0, galley, Color32::WHITE);
     resp
 }

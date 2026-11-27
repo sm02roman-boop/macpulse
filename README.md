@@ -57,9 +57,9 @@ Not Apple's on-device model: that framework is Swift-only and needs macOS 26 on 
 
 ## Appearance
 
-On macOS the window uses a glass look: the system blur behind the window, frosted cards and a title bar
-merged into the content. If it looks wrong on your Mac, open **AI Settings > Appearance**, untick
-*Glass window* and restart for a solid dark window.
+Dark "frosted glass" look: translucent cards over soft coloured light, drawn icons, and a title bar merged into the
+window on macOS. The window itself is solid; an OS-level blur behind the window is deliberately not used because
+it hid the app's content on macOS.
 
 ## Permissions
 

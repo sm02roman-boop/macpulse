@@ -90,7 +90,7 @@ pub fn show(ui: &mut Ui, items: &[Item], selected: Option<&str>, height: f32) ->
         let fill = if resp.hovered() { base.gamma_multiply(1.2) } else { base };
         let p = ui.painter().with_clip_rect(r);
         p.rect_filled(r, 6.0, fill);
-        ui.painter().rect_stroke(r, 6.0, Stroke::new(1.0, Color32::from_white_alpha(44)), egui::StrokeKind::Inside);
+        ui.painter().rect_stroke(r, 6.0, Stroke::new(1.0, crate::theme::veil(44)), egui::StrokeKind::Inside);
         if is_sel {
             ui.painter().rect_stroke(r, 4.0, Stroke::new(2.5_f32, Color32::WHITE), egui::StrokeKind::Inside);
         }
