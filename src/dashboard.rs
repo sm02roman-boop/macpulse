@@ -14,6 +14,8 @@ pub enum Go {
     Battery,
     Network,
     SmartCare,
+    Assistant,
+    Settings,
 }
 
 pub struct CareSummary {
@@ -97,7 +99,7 @@ fn level_label(pct: f32) -> (String, Color32) {
     }
 }
 
-fn storage_visual(ui: &mut Ui, name: &str, total: u64, free: u64, reclaim: u64) {
+pub fn storage_visual(ui: &mut Ui, name: &str, total: u64, free: u64, reclaim: u64) {
     let used = total.saturating_sub(free);
     ui.horizontal(|ui| {
         ui.label(RichText::new(if name.is_empty() { "Startup disk" } else { name }).size(15.0).strong());

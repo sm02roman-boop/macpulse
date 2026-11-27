@@ -3,8 +3,10 @@
 use crate::monitor::Snapshot;
 use crate::util;
 
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+#[derive(Clone, Copy, PartialEq, Debug)]
 pub enum Action {
+    /// Left click on the menu bar item; rect is the icon's position and size in screen pixels.
+    TogglePopover { x: f64, y: f64, w: f64, h: f64 },
     OpenWindow,
     OpenSmartCare,
     Quit,
@@ -49,7 +51,7 @@ mod stub {
 mod imp {
     use super::*;
     use tray_icon::menu::{Menu, MenuEvent, MenuItem, PredefinedMenuItem};
-    use tray_icon::{Icon, TrayIcon, TrayIconBuilder};
+    use tray_icon::{Icon, MouseButton, MouseButtonState, TrayIcon, TrayIconBuilder, TrayIconEvent};
 
     pub struct Tray {
         icon: TrayIcon,
@@ -99,6 +101,7 @@ mod imp {
             menu.append(&quit).ok()?;
             let icon = TrayIconBuilder::new()
                 .with_menu(Box::new(menu))
+                .with_menu_on_left_click(false)
                 .with_icon(ring_icon()?)
                 .with_icon_as_template(true)
                 .with_title("--%")
@@ -117,6 +120,11 @@ mod imp {
 
         pub fn poll(&self) -> Vec<Action> {
             let mut out = vec![];
+            while let Ok(ev) = TrayIconEvent::receiver().try_recv() {
+                if let TrayIconEvent::Click { rect, button: MouseButton::Left, button_state: MouseButtonState::Up, .. } = ev {
+                    out.push(Action::TogglePopover { x: rect.position.x, y: rect.position.y, w: rect.size.width as f64, h: rect.size.height as f64 });
+                }
+            }
             while let Ok(ev) = MenuEvent::receiver().try_recv() {
                 if ev.id == *self.open.id() {
                     out.push(Action::OpenWindow);

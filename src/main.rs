@@ -10,6 +10,7 @@ mod leftovers;
 mod mac;
 mod monitor;
 mod pages;
+mod popover;
 mod storage;
 mod theme;
 mod tray;
@@ -156,6 +157,8 @@ struct App {
     tray: Option<tray::Tray>,
     sel_group: Option<String>,
     machine: monitor::Machine,
+    pop: popover::State,
+    preview_popover: bool,
 }
 
 impl App {
@@ -179,6 +182,8 @@ impl App {
             tray: tray::Tray::new(),
             sel_group: None,
             machine: monitor::Machine::detect(),
+            pop: popover::State::new(),
+            preview_popover: std::env::var("MACPULSE_PAGE").map(|v| v == "popover").unwrap_or(false),
         }
     }
 
@@ -273,6 +278,89 @@ impl App {
         });
     }
 
+    fn popover_data(&self) -> (dashboard::CareSummary, Vec<String>) {
+        let (total, safe, categories) = self.care.summary();
+        (dashboard::CareSummary { total, safe, categories }, self.care.top_categories(3))
+    }
+
+    fn apply_pop_action(&mut self, ctx: &egui::Context, a: popover::Action) {
+        use dashboard::Go;
+        match a {
+            popover::Action::Quit => std::process::exit(0),
+            popover::Action::Go(g) => {
+                self.page = match g {
+                    Go::Memory => Page::Memory,
+                    Go::Cpu => Page::Cpu,
+                    Go::Storage => Page::Storage,
+                    Go::Battery => Page::Battery,
+                    Go::Network => Page::Network,
+                    Go::SmartCare => Page::SmartCare,
+                    Go::Assistant => Page::Assistant,
+                    Go::Settings => Page::AiSettings,
+                };
+                self.pop.open = false;
+                ctx.send_viewport_cmd_to(egui::ViewportId::ROOT, egui::ViewportCommand::Minimized(false));
+                ctx.send_viewport_cmd_to(egui::ViewportId::ROOT, egui::ViewportCommand::Focus);
+            }
+        }
+    }
+
+    /// The floating menu-bar panel, as a borderless always-on-top window.
+    fn show_popover(&mut self, ctx: &egui::Context) {
+        if !self.pop.open {
+            return;
+        }
+        let (care, cats) = self.popover_data();
+        let builder = egui::ViewportBuilder::default()
+            .with_title("MacPulse Menu")
+            .with_inner_size(popover::SIZE)
+            .with_position(self.pop.pos)
+            .with_decorations(false)
+            .with_resizable(false)
+            .with_always_on_top();
+        let mut action = None;
+        let mut close = false;
+        let (mon, machine) = (&self.mon, &self.machine);
+        let (tab, focused_once) = (&mut self.pop.tab, &mut self.pop.focused_once);
+        ctx.show_viewport_immediate(egui::ViewportId::from_hash_of("macpulse-popover"), builder, |ctx, _class| {
+            egui::CentralPanel::default()
+                .frame(egui::Frame::new().fill(theme::BG).stroke(Stroke::new(1.0_f32, theme::card_border())).inner_margin(14))
+                .show(ctx, |ui| {
+                    theme::backdrop(&ui.painter_at(ui.max_rect()), ui.max_rect());
+                    action = popover::content(ui, tab, mon, machine, &care, &cats);
+                });
+            match ctx.input(|i| i.viewport().focused) {
+                Some(true) => *focused_once = true,
+                Some(false) if *focused_once => close = true,
+                _ => {}
+            }
+            if ctx.input(|i| i.key_pressed(egui::Key::Escape) || i.viewport().close_requested()) {
+                close = true;
+            }
+        });
+        if close {
+            self.pop.open = false;
+        }
+        if let Some(a) = action {
+            self.apply_pop_action(ctx, a);
+        }
+    }
+
+    /// Developer preview: render the popover inside the main window (MACPULSE_PAGE=popover).
+    fn preview_popover_ui(&mut self, ctx: &egui::Context) {
+        let (care, cats) = self.popover_data();
+        let mut tab = self.pop.tab;
+        egui::CentralPanel::default().frame(egui::Frame::new().fill(theme::BG).inner_margin(14)).show(ctx, |ui| {
+            let size = vec2(popover::SIZE[0] - 28.0, popover::SIZE[1] - 28.0);
+            ui.allocate_ui_with_layout(size, egui::Layout::top_down(egui::Align::Min), |ui| {
+                ui.set_min_size(size);
+                theme::backdrop(&ui.painter_at(ui.max_rect()), ui.max_rect());
+                let _ = popover::content(ui, &mut tab, &self.mon, &self.machine, &care, &cats);
+            });
+        });
+        self.pop.tab = tab;
+    }
+
     fn draw_page(&mut self, ui: &mut egui::Ui) {
         let page = self.page;
         if page == Page::Overview {
@@ -298,6 +386,8 @@ impl App {
                     Some(dashboard::Go::Battery) => self.page = Page::Battery,
                     Some(dashboard::Go::Network) => self.page = Page::Network,
                     Some(dashboard::Go::SmartCare) => self.page = Page::SmartCare,
+                    Some(dashboard::Go::Assistant) => self.page = Page::Assistant,
+                    Some(dashboard::Go::Settings) => self.page = Page::AiSettings,
                     None => {}
                 }
             }
@@ -365,6 +455,17 @@ impl eframe::App for App {
         if let Some(t) = &self.tray {
             for a in t.poll() {
                 match a {
+                    tray::Action::TogglePopover { x, y, w, h } => {
+                        if self.pop.open {
+                            self.pop.open = false;
+                        } else {
+                            let ppp = ctx.pixels_per_point().max(1.0) as f64;
+                            let px = ((x + w / 2.0) / ppp) as f32 - popover::SIZE[0] / 2.0;
+                            self.pop.pos = egui::pos2(px.max(8.0), ((y + h) / ppp) as f32 + 4.0);
+                            self.pop.open = true;
+                            self.pop.focused_once = false;
+                        }
+                    }
                     tray::Action::OpenWindow => {
                         ctx.send_viewport_cmd(egui::ViewportCommand::Minimized(false));
                         ctx.send_viewport_cmd(egui::ViewportCommand::Focus);
@@ -379,6 +480,11 @@ impl eframe::App for App {
             }
         }
         self.care.tick(ctx);
+        if self.preview_popover {
+            self.preview_popover_ui(ctx);
+            return;
+        }
+        self.show_popover(ctx);
         egui::SidePanel::left("nav")
             .exact_width(220.0)
             .resizable(false)
@@ -469,6 +575,8 @@ mod smoke {
             tray: None,
             sel_group: Some("App 3".into()),
             machine: monitor::Machine::detect(),
+            pop: popover::State::new(),
+            preview_popover: false,
         }
     }
 
@@ -497,6 +605,26 @@ mod smoke {
         }
         }
         theme::set_glass(false);
+    }
+
+    #[test]
+    fn popover_renders_every_tab() {
+        let ctx = egui::Context::default();
+        theme::set_glass(true);
+        theme::apply(&ctx);
+        let a = app();
+        let care = dashboard::CareSummary { total: 195_000_000, safe: 51_000_000, categories: 4 };
+        let cats = vec!["App Caches".to_string(), "Trash".to_string()];
+        for tab in [popover::Tab::Overview, popover::Tab::Memory, popover::Tab::Disk, popover::Tab::Network, popover::Tab::Battery] {
+            let mut t = tab;
+            let mut input = egui::RawInput::default();
+            input.screen_rect = Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(392.0, 700.0)));
+            let _ = ctx.run(input, |ctx| {
+                egui::CentralPanel::default().show(ctx, |ui| {
+                    let _ = popover::content(ui, &mut t, &a.mon, &a.machine, &care, &cats);
+                });
+            });
+        }
     }
 
     #[test]

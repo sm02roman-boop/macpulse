@@ -96,6 +96,7 @@ pub fn apply(ctx: &egui::Context) {
         w.corner_radius = r;
     }
     v.widgets.noninteractive.bg_stroke = Stroke::new(1.0_f32, card_border());
+    v.widgets.noninteractive.fg_stroke = Stroke::new(1.0_f32, Color32::from_rgb(218, 218, 236));
     let btn = if glass() { veil(20) } else { Color32::from_rgb(44, 44, 62) };
     let btn_hover = if glass() { veil(38) } else { Color32::from_rgb(62, 56, 94) };
     v.widgets.inactive.bg_fill = btn;

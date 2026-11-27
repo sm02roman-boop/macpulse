@@ -418,3 +418,19 @@ impl State {
         (total, safe, cats.len())
     }
 }
+
+impl State {
+    /// Category names ordered by reclaimable size, biggest first.
+    pub fn top_categories(&self, n: usize) -> Vec<String> {
+        let mut sizes: Vec<(&str, u64)> = vec![];
+        for r in &self.rows {
+            let c = TARGETS[r.target].category;
+            match sizes.iter_mut().find(|(n, _)| *n == c) {
+                Some(e) => e.1 += r.bytes,
+                None => sizes.push((c, r.bytes)),
+            }
+        }
+        sizes.sort_by(|a, b| b.1.cmp(&a.1));
+        sizes.into_iter().take(n).map(|(c, _)| c.to_string()).collect()
+    }
+}
