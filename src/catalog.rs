@@ -88,11 +88,42 @@ pub struct Command {
     pub detail: &'static str,
     pub candidates: &'static [&'static str],
     pub args: &'static [&'static str],
+    /// Extra path that must exist for the tool to be usable (e.g. full Xcode for simctl).
+    pub requires: Option<&'static str>,
+}
+
+impl Command {
+    /// The executable to run, if this tool is really installed on this Mac.
+    pub fn find(&self) -> Option<&'static str> {
+        if let Some(req) = self.requires {
+            if !std::path::Path::new(req).exists() {
+                return None;
+            }
+        }
+        self.candidates.iter().copied().find(|p| std::path::Path::new(p).exists())
+    }
 }
 
 /// Things that are not "delete a folder": run the tool's own cleanup so nothing breaks.
 pub static COMMANDS: &[Command] = &[
-    Command { title: "Docker: prune unused data", detail: "docker system prune -f — removes stopped containers, dangling images and unused networks. Never touches volumes.", candidates: &["/usr/local/bin/docker", "/opt/homebrew/bin/docker", "/Applications/Docker.app/Contents/Resources/bin/docker"], args: &["system", "prune", "-f"] },
-    Command { title: "Homebrew: cleanup", detail: "brew cleanup -s — removes old versions and stale downloads.", candidates: &["/opt/homebrew/bin/brew", "/usr/local/bin/brew"], args: &["cleanup", "-s"] },
-    Command { title: "Xcode: remove unavailable simulators", detail: "xcrun simctl delete unavailable — deletes simulators whose runtime is gone.", candidates: &["/usr/bin/xcrun"], args: &["simctl", "delete", "unavailable"] },
+    Command { title: "Docker: prune unused data", detail: "docker system prune -f — removes stopped containers, dangling images and unused networks. Never touches volumes.", candidates: &["/usr/local/bin/docker", "/opt/homebrew/bin/docker", "/Applications/Docker.app/Contents/Resources/bin/docker"], args: &["system", "prune", "-f"], requires: None },
+    Command { title: "Homebrew: cleanup", detail: "brew cleanup -s — removes old versions and stale downloads.", candidates: &["/opt/homebrew/bin/brew", "/usr/local/bin/brew"], args: &["cleanup", "-s"], requires: None },
+    Command { title: "Xcode: remove unavailable simulators", detail: "xcrun simctl delete unavailable — deletes simulators whose runtime is gone. Needs the full Xcode app.", candidates: &["/usr/bin/xcrun"], args: &["simctl", "delete", "unavailable"], requires: Some("/Applications/Xcode.app") },
 ];
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn tools_report_missing_when_not_installed() {
+        // None of these exist in the Linux build/test environment.
+        for c in COMMANDS {
+            assert!(c.find().is_none(), "{}", c.title);
+        }
+        let fake = Command { title: "t", detail: "", candidates: &["/bin/sh"], args: &[], requires: None };
+        assert_eq!(fake.find(), Some("/bin/sh"));
+        let gated = Command { title: "t", detail: "", candidates: &["/bin/sh"], args: &[], requires: Some("/definitely/missing") };
+        assert!(gated.find().is_none());
+    }
+}

@@ -154,8 +154,8 @@ impl State {
 
     fn run_command(&mut self, ctx: &egui::Context, i: usize) {
         let c = &COMMANDS[i];
-        let Some(bin) = c.candidates.iter().find(|p| std::path::Path::new(p).exists()) else {
-            self.cmd_output = Some((c.title.into(), "Tool not found on this Mac.".into()));
+        let Some(bin) = c.find() else {
+            self.cmd_output = Some((c.title.into(), "Not installed on this Mac, so there is nothing to clean.".into()));
             return;
         };
         self.busy = true;
@@ -300,13 +300,20 @@ impl State {
             ui.add_space(8.0);
             ui.label(RichText::new("Tool cleanups").strong());
             for (i, c) in COMMANDS.iter().enumerate() {
+                let installed = c.find().is_some();
                 ui.horizontal(|ui| {
                     ui.vertical(|ui| {
-                        ui.label(c.title);
+                        ui.horizontal(|ui| {
+                            let title = RichText::new(c.title);
+                            ui.label(if installed { title } else { title.color(crate::theme::MUTED) });
+                            if !installed {
+                                ui.label(RichText::new("NOT INSTALLED").small().strong().color(crate::theme::MUTED));
+                            }
+                        });
                         ui.label(RichText::new(c.detail).small().color(crate::theme::MUTED));
                     });
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        if ui.add_enabled(!self.busy, egui::Button::new("Run")).clicked() {
+                        if ui.add_enabled(!self.busy && installed, egui::Button::new("Run")).clicked() {
                             self.run_command(&ctx, i);
                         }
                     });
